@@ -1,25 +1,20 @@
 
-
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-import statsmodels.api as sm
 import random
 import seaborn as sns
 import scipy
 import tqdm
-from numba import jit
 import multiprocess as mp
 from functools import partial
-
-arr = pd.read_csv("phylo.csv",
-                 delimiter=",")
+from timeit import default_timer as timer
 
 class Expression_data:
     def __init__(self,expression_data) -> None:
         self.full = expression_data
         exps = expression_data.iloc[:, 3:]
-        self.age_weighted = exps.mul(expression_data["Phylostratum"], axis=0)
+        self.age_weighted = exps.mul(expression_data["Phylostratum"], axis=0).to_numpy()
         self.expressions_n = exps.to_numpy()
         self.expressions = exps
 
@@ -40,7 +35,11 @@ class GA:
     
     @staticmethod
     def create_population(ind_length,pop_size,init_num_removed):
-        return np.array([random.choices([0,1], weights=(1, random.randint(ind_length//(init_num_removed*3),ind_length//init_num_removed)), k=ind_length) for _  in range(pop_size)])
+        a =  ind_length//(init_num_removed*3)
+        b = ind_length//init_num_removed
+        pop = np.array([random.choices([0,1], weights=(1, random.randint(a,b)), k=ind_length) for _  in range(pop_size)],dtype="b")
+        
+        return pop
 
     def __init__(self,expression_data,pop_size,num_gen,init_num_removed,mutation_probability,crossover_probability) -> None:
         ind_length = expression_data.full.shape[0]
@@ -52,7 +51,7 @@ class GA:
         self.num_gen = num_gen
         self.population = GA.create_population(ind_length,pop_size,init_num_removed)
         self.fitness = np.zeros(pop_size)
-        self.parents = np.ones((num_parents,ind_length))
+        self.parents = np.ones((num_parents,ind_length),dtype="b")
         self.mutation_probability = mutation_probability
         self.num_parents = num_parents
         self.crossover_probability = crossover_probability
@@ -66,6 +65,7 @@ class GA:
         return np.var(avgs,axis=1)
 
     def get_var_and_p_single(self,solution):
+
         up = solution.dot(self.expression_data.age_weighted)
         down = solution.dot(self.expression_data.expressions_n)
         avgs = np.divide(up,down)
@@ -74,20 +74,8 @@ class GA:
     
     def get_p_value(self):
         return  1 - np.array(self.gamma.cdf(self.get_tai_var()))
-
+        
     def fitness_funct(self):
-        num_not_removed = np.sum(self.population,axis = 1)
-        num_removed = self.ind_length - num_not_removed
-        self.fitness = self.get_p_value() *  (1 - num_removed/self.ind_length)* 0.1 
-        to_add = np.multiply(self.fitness > 0.1,1) 
-        self.fitness += to_add
-        
-    def fitness_funct2(self):
-        num_not_removed = np.sum(self.population,axis = 1)
-        num_removed = self.ind_length - num_not_removed
-        self.fitness = self.get_p_value() *  np.log(2 - num_removed/self.ind_length) 
-        
-    def fitness_funct3(self):
         num_not_removed = np.sum(self.population,axis = 1)
         num_removed = self.ind_length - num_not_removed
         self.fitness = self.get_p_value() 
@@ -109,25 +97,27 @@ class GA:
     @staticmethod
     def mutate2(mut_prob,offspring):
         if random.random() < mut_prob:
-            randomlist = np.random.randint(0,len(offspring), size=random.randint(1,15))
-            randomlist1 = np.random.randint(0,len(offspring), size=random.randint(1,10))
+            randomlist = random.sample(range(len(offspring)), k=random.getrandbits(4))
+            #randomlist1 = np.random.randint(0,len(offspring), size=random.randint(1,400))
             for ind in randomlist:
                 offspring[ind] = (offspring[ind] + 1) % 2
-            offspring[randomlist1] = 0
+            #offspring[randomlist1] = 1
         return offspring
 
     def mutation_func2(self):
         mut = partial(GA.mutate2, self.mutation_probability)
         with mp.Pool() as pool2:
-            res = np.array(pool2.map(mut, self.population))
+            res = np.array(list(map(mut, self.population)))
             self.population = res
     
     
     def steady_state_selection(self):
-        fitness_sorted = sorted(range(len(self.fitness)), key=lambda k: self.fitness[k])
-        fitness_sorted.reverse()
-        for parent_num in range(self.num_parents):
-            self.parents[parent_num, :] = self.population[fitness_sorted[parent_num], :].copy()
+        f_s = self.fitness.argsort()[::-1]
+        num_good = round(self.num_parents * 0.9)
+        num_bad = self.num_parents  - num_good
+        bad_inds = np.array(random.sample(range(num_good,self.pop_size),k=num_bad))
+        self.parents[:num_good, :] = self.population[f_s[:num_good], :].copy()
+        self.parents[num_good:, :] = self.population[f_s[bad_inds], :].copy()
 
 
     def scattered_crossover(self):
@@ -154,20 +144,35 @@ class GA:
             # A 0/1 vector where 0 means the gene is taken from the first parent and 1 means the gene is taken from the second parent.
             gene_sources = np.random.randint(0, 4, size=self.ind_length)
             self.population[k, :] =  np.where(gene_sources > 0, self.parents[parent1_idx, :], self.parents[parent2_idx, :])
-
+    
     def __call__(self):
         self.fitness_funct()
         for self.curr_gen in range(ga.num_gen):
             self.steady_state_selection()
             self.scattered_crossover()
             self.mutation_func2()
-            self.fitness_funct3()
+            self.fitness_funct()
             self.on_gen()
-            
-expression_data = Expression_data(arr)
-ga = GA(expression_data,2500,130,3,0.55,0.2)  
-ga()
+        return self
 
+
+            
+arr = pd.read_csv("phylo.csv",
+                 delimiter=",")
+expression_data = Expression_data(arr)
+start = timer()
+ga = GA(expression_data,2500,180,3,0.55,0.2)  
+"""
+solutions = []
+for _ in range(10):
+    ga_c = copy.deepcopy(ga)
+    ga_finish = ga_c()
+    solutions.append(ga_finish.population[np.argmax(ga_finish.fitness)])
+"""
+ga()
+end = timer()
+print(end - start)
+#np.savetxt("solutions.csv", np.array(solutions), delimiter=",")
 
 
 
