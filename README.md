@@ -19,30 +19,6 @@ https://github.com/lavakin/ga_for_hourglass/assets/76702901/5435d04b-151b-46da-b
 - Customizable: Easily adjustable parameters and fitness functions for different analyses.
 - Visualization: Provides tools for visualizing the hourglass pattern and selected gene subset.
 
-Apologies for the misunderstanding. Here's the revised "About" section that reflects the algorithm's objective of identifying a subset of genes that, when removed from the dataset, minimizes the presence of the hourglass pattern:
-
-markdown
-
-## Project Name
-
-Developmental Gene Analysis: Hourglass Pattern Optimization Algorithm
-
-## Description
-
-The Developmental Gene Analysis project features an algorithm designed to optimize the removal of genes contributing to the observed hourglass pattern in developmental gene expression data. The hourglass pattern refers to a characteristic developmental pattern observed in various organisms, where the morphological and genetic similarities between individuals are most pronounced at a specific stage of development.
-
-This algorithm aims to identify a subset of genes that, if removed from the dataset, would significantly reduce the presence of the hourglass pattern. By employing a multi-objective genetic algorithm, it maximizes the removal of the hourglass pattern while minimizing the disruption to the overall gene expression profile.
-
-The algorithm utilizes the DEAP (Distributed Evolutionary Algorithms in Python) library, which provides a flexible framework for implementing genetic algorithms. It offers various selection methods, mutation operators, and genetic operators to evolve populations of candidate solutions.
-
-## Key Features
-
-- Multi-objective optimization: Identifies a subset of genes that, when removed, minimizes the presence of the hourglass pattern.
-- Developmental gene expression analysis: Analyzes gene expression data to identify hourglass pattern genes.
-- Genetic algorithm: Utilizes DEAP library for efficient evolutionary computation.
-- Customizable: Easily adjustable parameters and fitness functions for different analyses.
-- Visualization: Provides tools for visualizing the hourglass pattern and selected gene subset.
-
 ## Installation
 To use this project, follow these steps:
 
