@@ -33,6 +33,6 @@ Contributions to this project are welcome. If you have any ideas for improvement
 
 ## License
 
-This project is licensed under the [MIT License](https://opensource.org/licenses/MIT). Feel free to use and modify the code according to the terms of this license.
+This project is licensed under the GNU License. Feel free to use and modify the code according to the terms of this license.
 
 ## Example usage
