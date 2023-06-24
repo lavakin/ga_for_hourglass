@@ -90,7 +90,7 @@ population = [toolbox.individual() for _ in range(population_size)]
 toolbox.register("evaluate", evaluate_individual)
 toolbox.register("mate", tools.cxUniform,indpb=0.03)
 toolbox.register("mutate", tools.mutFlipBit, indpb=0.003)
-toolbox.register("select", tools.selSPEA2)
+toolbox.register("select", tools.selNSGA2)
 
 stats = tools.Statistics()
 stats.register("Num removed", lambda x: np.max([ind.fitness.values[0] for ind in x]))

@@ -4,3 +4,12 @@ best_graphs
 results
 prezentace
 random
+src/__pycache__
+src/.DS_Store
+src/analyze_solutions1.ipynb
+src/pyGAD_implementation.ipynb
+src/prm_playground.ipynb
+src/perm_metric_alg.py
+src/clustering.ipynb
+src/DEAP_playground.ipynb
+
