@@ -3,6 +3,10 @@
 # Hourglass destroyer
 ## About
 
+
+https://github.com/lavakin/ga_for_hourglass/assets/76702901/5435d04b-151b-46da-b179-d48ca9a7e5ce
+
+
 ## Instalation
 
 ## example usage
