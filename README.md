@@ -3,7 +3,7 @@
 # Hourglass destroyer
 ## Description
 
-The Developmental Gene Analysis project features an algorithm designed to identify genes contributing to the observed hourglass pattern in developmental gene expression data. The hourglass pattern refers to a characteristic developmental pattern observed in various organisms, where the morphological and genetic similarities between individuals are most pronounced at a specific stages of development.
+The Hourglass Destroyer project features an algorithm designed to identify genes contributing to the observed hourglass pattern in developmental gene expression data. The hourglass pattern refers to a characteristic developmental pattern observed in various organisms, where the morphological and genetic similarities between individuals are most pronounced at a specific stages of development.
 
 This algorithm aims to identify a subset of genes that, if removed from the dataset, would significantly reduce the presence of the hourglass pattern. By employing a multi-objective genetic algorithm, it maximizes the removal of the hourglass pattern while minimizing the number of removed genes.
 
