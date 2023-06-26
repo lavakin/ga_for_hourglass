@@ -9,4 +9,5 @@
 - started adding different stopping condition
 
 ## 26.06.2023
-- testing parallelism
+- testing parallelism - its slow
+- split optimization into two parts - fast and refining
