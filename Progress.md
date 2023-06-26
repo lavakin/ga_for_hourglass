@@ -1,3 +1,8 @@
+## 24.06.2023
+- adding readme
+- paramter tuning
+- trying out different solvers
+  
 ## 25.06.2023
 - added parallelism
 - created overleaf project for the paper
