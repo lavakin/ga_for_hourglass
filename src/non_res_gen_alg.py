@@ -24,8 +24,7 @@ class Expression_data:
         self.full = expression_data
         exps = expression_data.iloc[:, 3:]
         #exps = exps.apply(lambda row: Expression_data.quantilerank(row))
-        #exps = np.log(exps).apply(lambda x: (x - x.mean()) / x.std(), axis=1)
-        exps = exps.apply(lambda x: (x - x.mean()) / x.std(), axis=1)
+        exps = np.log(exps).apply(lambda x: (x - x.mean()) / x.std(), axis=1)
         self.age_weighted = exps.mul(expression_data["Phylostratum"], axis=0).to_numpy()
         self.expressions_n = exps.to_numpy()
         self.expressions = exps
@@ -59,7 +58,7 @@ class GA:
     def __init__(self,expression_data,pop_size,num_gen,init_num_removed,mutation_probability,crossover_probability) -> None:
         ind_length = expression_data.full.shape[0]
         num_parents = round(pop_size * 0.15)
-        self.gamma = GA.flat_line_test_g_dist(expression_data,70000)
+        self.gamma = GA.flat_line_test_g_dist(expression_data,120000)
         #self.gamma = scipy.stats.gamma(0.16114080012196816, scale=0.003763919999917581,loc=1.369238206226383e-06)
         #self.gamma = scipy.stats.gamma(0.12894787508926014, scale=1.4138591772680575,loc=6.088829427981213e-07)
         # After modifications

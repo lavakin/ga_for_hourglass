@@ -5,7 +5,9 @@ import numpy as np
 import scipy
 import pandas as pd
 import array
-
+import multiprocess
+from timeit import default_timer as timer
+import GA_utils
 class Expression_data:
 
     def quantilerank(xs):
@@ -18,8 +20,7 @@ class Expression_data:
         self.full = expression_data
         exps = expression_data.iloc[:, 3:]
         #exps = exps.apply(lambda row: Expression_data.quantilerank(row))
-        #exps = np.log(exps).apply(lambda x: (x - x.mean()) / x.std(), axis=1)
-        #exps = exps.apply(lambda x: (x - x.mean()) / x.std(), axis=1)
+        exps = np.log(exps).apply(lambda x: (x - x.mean()) / x.std(), axis=1)
         self.age_weighted = exps.mul(expression_data["Phylostratum"], axis=0).to_numpy()
         self.expressions_n = exps.to_numpy()
         self.expressions = exps
@@ -29,13 +30,14 @@ arr = pd.read_csv("../data/phylo.csv",
                  delimiter=",")
 expression_data = Expression_data(arr)
 #gamma = scipy.stats.gamma(0.4206577838478015, scale=3.4008766040577783*15,loc=0.011999243192420739)
-#gamma = scipy.stats.gamma(0.20462984823721544, scale=3.65001910164493*20,loc=0.06399991264638039)
-gamma = scipy.stats.gamma(0.16114080012196816, scale=0.003763919999917581*5,loc=1.369238206226383e-06)
+gamma = scipy.stats.gamma(1.4227149340373417, scale=9.031080460446173*8,loc=0.025455686157844104)
 ind_length = expression_data.full.shape[0]
 
-population_size = 600
-num_generations = 1500
-num_parents = round(population_size * 0.15)
+population_size = 500
+population_size2 = 800
+parents_ratio = 0.25
+num_generations = 1000
+num_parents = round(population_size * 0.25)
 init_num_removed = 100
 
 
@@ -81,26 +83,36 @@ def scattered_crossover(ind1,ind2):
             ind2[i] = i1[i]
     return ind1,ind2
 
+
+    
+    
 creator.create("Fitness", base.Fitness, weights=(-1.0, 1.0))
 creator.create("Individual", array.array,typecode='b', fitness=creator.Fitness)
 toolbox = base.Toolbox()
 toolbox.register("individual", create_individual)
-#toolbox.register("population", tools.initRepeat, list, toolbox.individual)
-population = [toolbox.individual() for _ in range(population_size)]
 toolbox.register("evaluate", evaluate_individual)
 toolbox.register("mate", tools.cxUniform,indpb=0.03)
 toolbox.register("mutate", tools.mutFlipBit, indpb=0.003)
 toolbox.register("select", tools.selNSGA2)
+population = [toolbox.individual() for _ in range(population_size)]
 
-stats = tools.Statistics()
-stats.register("Num removed", lambda x: np.max([ind.fitness.values[0] for ind in x]))
-stats.register("P-value", lambda x: np.max([ind.fitness.values[1] for ind in x]))
+if __name__ == "__main__":
+    #pool = multiprocess.Pool()
+    #toolbox.register("map", pool.map)
+    #toolbox.register("population", tools.initRepeat, list, toolbox.individual)
 
+    stats = tools.Statistics()
+    stats.register("Num removed", lambda x: np.max([ind.fitness.values[0] for ind in x]))
+    stats.register("P-value", lambda x: np.max([ind.fitness.values[1] for ind in x]))
 
-population, logbook = algorithms.eaMuPlusLambda(population,toolbox, mu=num_parents, lambda_ = population_size,cxpb=0.3, mutpb=0.5, ngen=num_generations,stats=stats, verbose=True)
+    start = timer()
+    population, logbook = GA_utils.eaMuPlusLambda_stop(population,toolbox, mu=round(population_size * parents_ratio), lambda_ = population_size,cxpb=0.3, mutpb=0.5, ngen=num_generations,stats=stats, verbose=True)
+    toolbox.register("select", tools.selSPEA2)
+    population, logbook = algorithms.eaMuPlusLambda(population,toolbox, mu=round(population_size2 * parents_ratio), lambda_ = population_size,cxpb=0.3, mutpb=0.5, ngen=num_generations,stats=stats, verbose=True)
 
+    end = timer()
+    print(end - start)
 
-
-pareto_front = tools.sortNondominated(population, k=population_size,first_front_only=True)
-par = np.array([list(x) for x in pareto_front[0]])
-np.savetxt("../results/best_solutions_no_log.csv", par, delimiter=",")
+    pareto_front = tools.sortNondominated(population, k=population_size,first_front_only=True)
+    par = np.array([list(x) for x in pareto_front[0]])
+    np.savetxt("../results/best_solutions_no_log.csv", par, delimiter=",")
