@@ -10,14 +10,15 @@
 
 ## 26.06.2023
 - testing parallelism - its slow
-- split optimization into two parts - fast and refining
+-  <s>split optimization into two parts - fast and refining</s>
 
 ## 27.06.2023
 - further exploration of GA parameters
 - enhanced the productivity of my lab members by providing a nutritious cake
 - Tested the old version of the GA on Victors data
   - Uncovering a possible bug
-
+- Deciding on using just one solver insted two
+  
 ## 28.06.2023
 - Discovered a bug in the gamma fitting function provided by scipy
   - created an issue
