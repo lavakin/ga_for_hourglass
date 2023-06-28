@@ -24,3 +24,8 @@
   - temporary fix by using different fitting method
 - Discovered a small bud in the myTAI flat line test
 - Runned old GA on Victors data - seems promising
+
+![#f03c15](https://placehold.co/15x15/f03c15/f03c15.png) `TODO:`
+- Batch compute fitness
+- Automatize selection of the candidate genes
+- Fix myTAI bug or write an issue
