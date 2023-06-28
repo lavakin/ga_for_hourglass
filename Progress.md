@@ -23,6 +23,7 @@
 - Discovered a bug in the gamma fitting function provided by scipy
   - created an issue
   - temporary fix by using different fitting method
+    
 **Before:**
  ![image](https://github.com/lavakin/ga_for_hourglass/assets/76702901/32463344-149d-444c-aef4-e374b8b94943)
 **After:**
