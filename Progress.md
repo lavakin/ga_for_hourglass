@@ -34,6 +34,7 @@
 
 - Discovered a small bud in the myTAI flat line test
 - Runned old GA on Victors data - seems promising
+- Fixing gamam-fit bug actually improved the preformance of the new version significantly!
 
 ![#f03c15](https://placehold.co/15x15/f03c15/f03c15.png) `TODO:`
 - Batch compute fitness
