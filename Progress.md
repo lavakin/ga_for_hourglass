@@ -27,6 +27,7 @@
 **Before:**
 
  ![image](https://github.com/lavakin/ga_for_hourglass/assets/76702901/32463344-149d-444c-aef4-e374b8b94943)
+ 
 **After:**
 
 ![image](https://github.com/lavakin/ga_for_hourglass/assets/76702901/d7d4274c-5259-46f0-8e86-7e993df89fd0)
