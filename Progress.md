@@ -40,3 +40,4 @@
 - Batch compute fitness
 - Automatize selection of the candidate genes
 - Fix myTAI bug or write an issue
+- Speed up the cpp flat line test function by precomputing the permutations and implementing fast matrix multiplication 
