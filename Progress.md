@@ -36,8 +36,13 @@
 - Runned old GA on Victors data - seems promising
 - Fixing gamam-fit bug actually improved the preformance of the new version significantly!
 
+## 29.06.2023
+- tried different distribution for fitting variances
+- automatized selection of the candidate genes
+- fixed mytai bug
+
 ![#f03c15](https://placehold.co/15x15/f03c15/f03c15.png) `TODO:`
 - Batch compute fitness
-- Automatize selection of the candidate genes
+- Improve variancs fitting
 - Fix myTAI bug or write an issue
-- Speed up the cpp flat line test function by precomputing the permutations and implementing fast matrix multiplication 
+- Try to speed up the cpp flat line test function  
