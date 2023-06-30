@@ -45,4 +45,5 @@
 - Batch compute fitness
 - Improve variancs fitting
 - Fix myTAI bug or write an issue
-- Try to speed up the cpp flat line test function  
+- Try to speed up the cpp flat line test function
+- Creat an issue for the generic scipy.stats.fit
