@@ -39,7 +39,7 @@
 ## 29.06.2023
 - tried different distribution for fitting variances
 - automatized selection of the candidate genes
-- fixed mytai bug
+- started fixing mytai bug
 
 ![#f03c15](https://placehold.co/15x15/f03c15/f03c15.png) `TODO:`
 - Batch compute fitness
