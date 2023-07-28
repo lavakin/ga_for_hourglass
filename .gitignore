@@ -12,4 +12,5 @@ src/prm_playground.ipynb
 src/perm_metric_alg.py
 src/clustering.ipynb
 src/DEAP_playground.ipynb
-
+src/DEAP_one_obj.py
+src/multivariate_p_value.ipynb

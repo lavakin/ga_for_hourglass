@@ -29,16 +29,28 @@ class Expression_data:
 arr = pd.read_csv("../data/phylo.csv",
                  delimiter=",")
 expression_data = Expression_data(arr)
-#gamma = scipy.stats.gamma(0.4206577838478015, scale=3.4008766040577783*15,loc=0.011999243192420739)
-gamma = scipy.stats.gamma(1.4227149340373417, scale=9.031080460446173*8,loc=0.025455686157844104)
+#mean,prec = GA_utils.comp_mean_prec(expression_data,50000)
+variances = GA_utils.comp_vars(expression_data,100000)
 ind_length = expression_data.full.shape[0]
 
-population_size = 500
-population_size2 = 800
+population_size = 600
 parents_ratio = 0.25
 num_generations = 1000
-num_parents = round(population_size * 0.25)
 init_num_removed = 100
+
+
+
+def get_distance(solution):
+    sol = np.array(solution)
+    up = sol.dot(expression_data.age_weighted)
+    down = sol.dot(expression_data.expressions_n)
+    avgs = np.divide(up,down)
+    #return scipy.spatial.distance.mahalanobis(avgs,mean,prec)
+    return np.var(avgs)
+
+
+max_value = get_distance(np.ones(ind_length))
+min_value = max(variances)
 
 
 def create_individual():
@@ -47,21 +59,18 @@ def create_individual():
     individual = array.array("b",random.choices([0,1], weights=(1, random.randint(a,b)), k=ind_length))
     return creator.Individual(individual)
 
-def get_p_value(solution):
-    sol = np.array(solution)
-    up = sol.dot(expression_data.age_weighted)
-    down = sol.dot(expression_data.expressions_n)
-    avgs = np.divide(up,down)
-    varr = np.var(avgs)
-    return 1 - np.array(gamma.cdf(varr))
+def get_fit(res):
+    r = (res - min_value) / (max_value - min_value)
+    r = np.count_nonzero(variances < res)/len(variances) + max(0,r)
+    return r if r > 0.2 else 0
     
 def evaluate_individual(individual):
     num_not_removed = np.sum(individual)
     len_removed = ind_length - num_not_removed
-    p_value = get_p_value(individual)
-
+    distance = get_distance(individual)
+    fit = get_fit(distance)
     # Return the fitness values as a tuple
-    return len_removed, p_value
+    return len_removed, fit
 
 def mutate(individual,indpb):
     if random.random() < indpb:
@@ -86,15 +95,16 @@ def scattered_crossover(ind1,ind2):
 
     
     
-creator.create("Fitness", base.Fitness, weights=(-1.0, 1.0))
+creator.create("Fitness", base.Fitness, weights=(-1.0, -10.0))
 creator.create("Individual", array.array,typecode='b', fitness=creator.Fitness)
 toolbox = base.Toolbox()
 toolbox.register("individual", create_individual)
+toolbox.register("population", tools.initRepeat, list, toolbox.individual)
 toolbox.register("evaluate", evaluate_individual)
 toolbox.register("mate", tools.cxUniform,indpb=0.03)
-toolbox.register("mutate", tools.mutFlipBit, indpb=0.003)
-toolbox.register("select", tools.selNSGA2)
-population = [toolbox.individual() for _ in range(population_size)]
+toolbox.register("mutate", tools.mutFlipBit, indpb=0.0025)
+toolbox.register("select", tools.selSPEA2)
+
 
 if __name__ == "__main__":
     #pool = multiprocess.Pool()
@@ -103,16 +113,16 @@ if __name__ == "__main__":
 
     stats = tools.Statistics()
     stats.register("Num removed", lambda x: np.max([ind.fitness.values[0] for ind in x]))
-    stats.register("P-value", lambda x: np.max([ind.fitness.values[1] for ind in x]))
+    stats.register("Min max distance", lambda x: np.min([ind.fitness.values[1] for ind in x]))
 
     start = timer()
-    population, logbook = GA_utils.eaMuPlusLambda_stop(population,toolbox, mu=round(population_size * parents_ratio), lambda_ = population_size,cxpb=0.3, mutpb=0.5, ngen=num_generations,stats=stats, verbose=True)
-    toolbox.register("select", tools.selSPEA2)
-    population, logbook = algorithms.eaMuPlusLambda(population,toolbox, mu=round(population_size2 * parents_ratio), lambda_ = population_size,cxpb=0.3, mutpb=0.5, ngen=num_generations,stats=stats, verbose=True)
+    population, logbook = GA_utils.eaMuPlusLambda_stop(toolbox.population(n=population_size),toolbox, mu=round(population_size * parents_ratio), lambda_ = population_size,cxpb=0.4, mutpb=0.4, ngen=num_generations,stats=stats, verbose=True)
+    toolbox.register("select", tools.selNSGA2)
+    #population, logbook = GA_utils.eaMuPlusLambda_stop(population,toolbox, mu=round(population_size2 * parents_ratio), lambda_ = population_size2,cxpb=0.3, mutpb=0.5, ngen=num_generations2,stats=stats, verbose=True)
 
     end = timer()
     print(end - start)
 
     pareto_front = tools.sortNondominated(population, k=population_size,first_front_only=True)
     par = np.array([list(x) for x in pareto_front[0]])
-    np.savetxt("../results/best_solutions_no_log.csv", par, delimiter=",")
+    np.savetxt("../results/best_solutions_SPEA.csv", par, delimiter="\t")

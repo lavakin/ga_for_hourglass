@@ -11,6 +11,7 @@ import multiprocess as mp
 from functools import partial
 from timeit import default_timer as timer
 from GA_utils import * 
+import sys
 
 class Expression_data:
 
@@ -24,7 +25,7 @@ class Expression_data:
         self.full = expression_data
         exps = expression_data.iloc[:, 3:]
         #exps = exps.apply(lambda row: Expression_data.quantilerank(row))
-        exps = np.log(exps).apply(lambda x: (x - x.mean()) / x.std(), axis=1)
+        #exps = np.log(exps).apply(lambda x: (x - x.mean()) / x.std(), axis=1)
         self.age_weighted = exps.mul(expression_data["Phylostratum"], axis=0).to_numpy()
         self.expressions_n = exps.to_numpy()
         self.expressions = exps
@@ -41,11 +42,11 @@ class GA:
             weighted = expression_data.expressions.mul(perm, axis=0)
             avg = weighted.sum(axis=0)/expression_data.expressions.sum(axis=0)
             variances.append(np.var(avg))
-        shape, loc, scale = scipy.stats.gamma.fit(variances)
+        shape, loc, scale = scipy.stats.lognorm.fit(variances,method = "MM")
         print(shape)
         print(scale)
         print(loc)
-        return scipy.stats.gamma(shape, scale=scale*10,loc=loc)
+        return scipy.stats.lognorm(shape, scale=scale,loc=loc)
     
     @staticmethod
     def create_population(ind_length,pop_size,init_num_removed):
@@ -55,10 +56,10 @@ class GA:
         
         return pop
 
-    def __init__(self,expression_data,pop_size,num_gen,init_num_removed,mutation_probability,crossover_probability) -> None:
+    def __init__(self,expression_data,pop_size,num_gen,init_num_removed,mutation_probability,crossover_probability,gamma) -> None:
         ind_length = expression_data.full.shape[0]
         num_parents = round(pop_size * 0.15)
-        self.gamma = GA.flat_line_test_g_dist(expression_data,120000)
+        self.gamma = gamma
         #self.gamma = scipy.stats.gamma(0.16114080012196816, scale=0.003763919999917581,loc=1.369238206226383e-06)
         #self.gamma = scipy.stats.gamma(0.12894787508926014, scale=1.4138591772680575,loc=6.088829427981213e-07)
         # After modifications
@@ -101,10 +102,9 @@ class GA:
     def fitness_funct(self):
         num_not_removed = np.sum(self.population,axis = 1)
         num_removed = self.ind_length - num_not_removed
-        p_value = self.get_p_value() 
         #rem_ratio = 1 - num_removed/self.ind_length
-        p_v_l = 2*(1 - np.array(self.norm.cdf(num_removed)))
-        self.fitness = p_value + np.where(p_v_l > 1, 1, p_v_l)
+        self.fitness = self.get_p_value() 
+        self.fitness = self.fitness + (self.fitness * (1 - num_removed/self.ind_length))
         
     def get_avgs(self,sols):
         up = sols.dot(self.expression_data.age_weighted)
@@ -121,7 +121,6 @@ class GA:
             print("Fitness of the best solution :", self.fitness[max_fitness_on])
             print("Variance of the best solution :", varr)
             print("P-value of the best solution :", p)
-            print("P-value lngth of the best solution :", 2*(1 - np.array(self.norm.cdf(len(best_solution) - sum(best_solution)))))
             print("Length of the best solution :", len(best_solution) - sum(best_solution))
             print("Mutation probability :", self.mutation_probability)
         
@@ -132,7 +131,7 @@ class GA:
             self.p_prev_fit = self.prev_fit
             self.prev_fit = max_fitness
 
-        if self.curr_gen % 7 == 0:
+        if self.curr_gen % 10 == 0:
             best_solution = self.population[np.argmax(self.fitness)]
             best_sol_len = len(best_solution) - sum(best_solution)
             if self.prev_len == self.p_prev_len and self.prev_len == best_sol_len:
@@ -210,23 +209,25 @@ class GA:
         return self
 
 
-            
-arr = pd.read_csv("../data/phylo.csv",
-                 delimiter=",")
+file_name = sys.argv[1]
+arr = pd.read_csv(file_name,
+                 delimiter="\t")
 expression_data = Expression_data(arr)
 start = timer()
-ga = GA(expression_data,3000,500,300,0.3,0.25)  
-ga = ga()
-"""
 solutions = []
-for _ in range(7):
-    ga_c = copy.deepcopy(ga)<
-    ga_finish = ga_c()
+gamma = GA.flat_line_test_g_dist(expression_data,120000)
+for _ in range(10):
+    ga = GA(expression_data,3000,500,300,0.3,0.25,gamma)
+    ga_finish = ga()
     solutions.append(ga_finish.population[np.argmax(ga_finish.fitness)])
-"""
+
 end = timer()
 print(end - start)
-np.savetxt("../results/best_solutions.csv", ga.population[np.logical_and(ga.get_p_value()>0.98,np.sum(ga.population[np.argmax(ga.fitness)]) - 7 < np.sum(ga.population,axis=1))], delimiter=",")
+summed = np.array(solutions).sum(axis=0)
+sol = get_sol_from_indices(np.where(summed <= 3)[0],ga.ind_length)
+genes = get_removed_genes_from_solution(sol,expression_data.full)
+genes.to_csv("../results/victor/" + file_name.split("/")[-1])
+#np.savetxt("../results/victor/" + file_name.split("/")[-1], solutions, delimiter="\t")
 
 
 

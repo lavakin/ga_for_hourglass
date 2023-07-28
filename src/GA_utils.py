@@ -1,6 +1,8 @@
 import matplotlib.pyplot as plt
 import numpy as np 
 from deap import algorithms, base, creator, tools
+import tqdm
+import scipy
 
 def eaMuPlusLambda_stop(population, toolbox, mu, lambda_, cxpb, mutpb, ngen,
                    stats=None, halloffame=None, verbose=__debug__):
@@ -52,7 +54,7 @@ def eaMuPlusLambda_stop(population, toolbox, mu, lambda_, cxpb, mutpb, ngen,
         else:
             prev_max_len = max_len
             max_len_counter = 1
-        if max_len_counter > 70:
+        if max_len_counter > 120:
             break
     return population, logbook
 
@@ -94,3 +96,33 @@ def plot(GA):
             plt.vlines(varr, 0, GA.gamma.pdf(varr),colors=["Green"])
         plt.savefig("./best_graphs/best" + str(GA.curr_gen) + ".png")
         plt.close()
+
+def comp_mean_prec(expression_data, permutations):
+    Divisor = expression_data.expressions_n.sum(axis=0)
+    fMatrix = expression_data.expressions_n / Divisor
+    permMatrix = np.array([np.random.permutation(expression_data.full["Phylostratum"]) for _ in tqdm.trange(permutations)])
+    bootM = permMatrix @ fMatrix
+    bootM = np.unique(bootM, axis=1)
+    mean = np.mean(bootM, axis=0)
+    cov_matrix = np.cov(bootM, rowvar=False)
+    precision_matrix = np.linalg.inv(cov_matrix)
+    return mean,precision_matrix
+
+def comp_vars(expression_data,rounds):
+    avgs = []
+    phil = expression_data.full["Phylostratum"]
+    print("Running permuations")
+    for _ in tqdm.trange(rounds):
+        perm = np.random.permutation(phil)
+        weighted = expression_data.expressions.mul(perm, axis=0)
+        avg = weighted.sum(axis=0)/expression_data.expressions_n.sum(axis=0)
+        avgs.append(avg)
+    return np.var(np.array(avgs), axis=1)
+
+def get_sol_from_indices(indices,ind_len):
+    ones = np.ones(ind_len)
+    ones[indices] = 0
+    return ones
+
+def get_removed_genes_from_solution(solution,arr):
+    return arr.iloc[arr.index.values[np.where(solution == 0)[0]],:].GeneID
