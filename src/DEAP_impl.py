@@ -5,9 +5,15 @@ import numpy as np
 import scipy
 import pandas as pd
 import array
-import multiprocess
 from timeit import default_timer as timer
 import GA_utils
+import itertools
+from concurrent.futures import ThreadPoolExecutor
+import os
+import datetime
+import pickle
+import json
+
 class Expression_data:
 
     def quantilerank(xs):
@@ -30,12 +36,12 @@ arr = pd.read_csv("../data/phylo.csv",
                  delimiter=",")
 expression_data = Expression_data(arr)
 #mean,prec = GA_utils.comp_mean_prec(expression_data,50000)
-variances = GA_utils.comp_vars(expression_data,100000)
+variances = np.loadtxt("min_max.txt")
 ind_length = expression_data.full.shape[0]
 
-population_size = 600
+population_size = 2300
 parents_ratio = 0.25
-num_generations = 1000
+num_generations = 5
 init_num_removed = 100
 
 
@@ -46,11 +52,11 @@ def get_distance(solution):
     down = sol.dot(expression_data.expressions_n)
     avgs = np.divide(up,down)
     #return scipy.spatial.distance.mahalanobis(avgs,mean,prec)
-    return np.var(avgs)
+    return max(avgs) - min(avgs)
 
 
 max_value = get_distance(np.ones(ind_length))
-min_value = max(variances)
+min_value = 0
 
 
 def create_individual():
@@ -61,8 +67,9 @@ def create_individual():
 
 def get_fit(res):
     r = (res - min_value) / (max_value - min_value)
-    r = np.count_nonzero(variances < res)/len(variances) + max(0,r)
-    return r if r > 0.2 else 0
+    p = np.count_nonzero(variances < res)/len(variances)
+    r = p + r
+    return r if p > 0.5 else 0
     
 def evaluate_individual(individual):
     num_not_removed = np.sum(individual)
@@ -72,57 +79,93 @@ def evaluate_individual(individual):
     # Return the fitness values as a tuple
     return len_removed, fit
 
-def mutate(individual,indpb):
-    if random.random() < indpb:
-        randomlist = random.sample(range(len(individual)), k=random.getrandbits(5))
-        for ind in randomlist:
-            individual[ind] = (individual[ind] + 1) % 2
+
+def mutFlipBit(individual, indpb,mut_zero):
+    for i in range(len(individual)):
+        if random.random() < indpb:
+            individual[i] = type(individual[i])(not individual[i])
+    for i in np.where(np.array(individual) == 0)[0]:
+        if random.random() < mut_zero:
+            individual[i] = type(individual[i])(not individual[i])
+
+    return individual,
+    
+def mutate(individual, indpb):
+    randomlist = random.sample(range(ind_length), k=random.getrandbits(indpb))
+    for ind in randomlist:
+        individual[ind] = (individual[ind] + 1) % 2
     return individual,
 
-def scattered_crossover(ind1,ind2):
-    gene_sources = np.random.randint(0, 5, size=ind_length)
-    i1 = ind1.copy()
-    i2 = ind2.copy()
-    for i,x in enumerate(gene_sources):
-        if x > 0:
-            ind1[i] = i1[i]
-            ind2[i] = i2[i]
-        else:
-            ind1[i] = i2[i]
-            ind2[i] = i1[i]
-    return ind1,ind2
 
+def scattered_crossover(ind1, ind2, indpb:int):
+    gene_sources = np.random.randint(0, indpb, size=ind_length)
+    for i in range(ind_length):
+        if gene_sources[i] == 0:
+            ind1[i], ind2[i] = ind2[i], ind1[i]
+    return ind1, ind2
 
-    
-    
 creator.create("Fitness", base.Fitness, weights=(-1.0, -10.0))
 creator.create("Individual", array.array,typecode='b', fitness=creator.Fitness)
-toolbox = base.Toolbox()
-toolbox.register("individual", create_individual)
-toolbox.register("population", tools.initRepeat, list, toolbox.individual)
-toolbox.register("evaluate", evaluate_individual)
-toolbox.register("mate", tools.cxUniform,indpb=0.03)
-toolbox.register("mutate", tools.mutFlipBit, indpb=0.0025)
-toolbox.register("select", tools.selSPEA2)
 
+if __name__ == "__main__": 
+  
+    
+    #mutFlipBitp =  partial(mutFlipBit, mut_zero=mut_zero)
+    
 
-if __name__ == "__main__":
-    #pool = multiprocess.Pool()
-    #toolbox.register("map", pool.map)
-    #toolbox.register("population", tools.initRepeat, list, toolbox.individual)
+    toolbox = base.Toolbox()
+    toolbox.register("individual", create_individual)
+    toolbox.register("population", tools.initRepeat, list, toolbox.individual)
+    toolbox.register("evaluate", evaluate_individual)
+    toolbox.register("mate", scattered_crossover,indpb=5)
+    toolbox.register("mutate", mutate, indpb=5)
+    toolbox.register("select", tools.selNSGA2)
+
 
     stats = tools.Statistics()
-    stats.register("Num removed", lambda x: np.max([ind.fitness.values[0] for ind in x]))
+    stats.register("Num removed", lambda x: x[np.argmin([ind.fitness.values[1] for ind in x])].fitness.values[0])
     stats.register("Min max distance", lambda x: np.min([ind.fitness.values[1] for ind in x]))
-
-    start = timer()
     population, logbook = GA_utils.eaMuPlusLambda_stop(toolbox.population(n=population_size),toolbox, mu=round(population_size * parents_ratio), lambda_ = population_size,cxpb=0.4, mutpb=0.4, ngen=num_generations,stats=stats, verbose=True)
-    toolbox.register("select", tools.selNSGA2)
-    #population, logbook = GA_utils.eaMuPlusLambda_stop(population,toolbox, mu=round(population_size2 * parents_ratio), lambda_ = population_size2,cxpb=0.3, mutpb=0.5, ngen=num_generations2,stats=stats, verbose=True)
-
-    end = timer()
-    print(end - start)
-
     pareto_front = tools.sortNondominated(population, k=population_size,first_front_only=True)
     par = np.array([list(x) for x in pareto_front[0]])
-    np.savetxt("../results/best_solutions_SPEA.csv", par, delimiter="\t")
+
+    timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    results_folder = os.path.join("results", timestamp)
+    os.makedirs(results_folder)
+    
+    params = {"Crossover probability:" : 5,"Mutation probability:" : 5}
+    np.savetxt(os.path.join(results_folder, "results.txt"), par, delimiter="\t")
+    with open(os.path.join(results_folder,"logbook.pkl"), "wb") as logbook_file:
+        pickle.dump(logbook, logbook_file)
+    with open(os.path.join(results_folder, "logbook.json"), "w") as logbook_file:
+        json.dump(logbook, logbook_file)
+    with open(os.path.join(results_folder, "parameters.txt"), "w") as params_file:
+        for key, value in params.items():
+            params_file.write(f"{key}: {value}\n")
+    
+ 
+   
+
+"""
+def get_step(rangee,num):
+    return (rangee[1]-rangee[0])/num
+
+
+cross_range = [0.03, 0.7]  # From 0.1 to 1.0 (inclusive)
+mut_range = [0.005, 0.5]
+zero_range = [0.005,0.1]
+
+# Generate all combinations of the parameters
+parameter_combinations = itertools.product(np.arange(cross_range[0], cross_range[1] + get_step(cross_range,5), get_step(cross_range,5)),
+                                           np.arange(mut_range[0], mut_range[1] + get_step(mut_range,5), get_step(mut_range,5)),
+                                           np.arange(zero_range[0], zero_range[1] + get_step(zero_range,5), get_step(zero_range,5)))
+
+# Create a ThreadPoolExecutor to run the grid search in parallel
+with ThreadPoolExecutor() as executor:
+    
+    # Submit the function with different parameter combinations to the ThreadPoolExecutor
+    futures = [executor.submit(run_GA, *params) for params in parameter_combinations]
+
+    # Get the results as they become available
+    results = [future.result() for future in futures]
+"""
