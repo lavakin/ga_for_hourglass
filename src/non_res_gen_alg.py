@@ -13,6 +13,8 @@ from timeit import default_timer as timer
 from GA_utils import * 
 import sys
 
+variances = np.loadtxt("min_max_raw.txt")
+
 class Expression_data:
 
     def quantilerank(xs):
@@ -32,21 +34,6 @@ class Expression_data:
 
 class GA:
     
-    @staticmethod
-    def flat_line_test_g_dist(expression_data,rounds):
-        phil = expression_data.full['Phylostratum']
-        variances = []
-        print("Running permuations")
-        for _ in tqdm.trange(rounds):
-            perm = np.random.permutation(phil)
-            weighted = expression_data.expressions.mul(perm, axis=0)
-            avg = weighted.sum(axis=0)/expression_data.expressions.sum(axis=0)
-            variances.append(np.var(avg))
-        shape, loc, scale = scipy.stats.lognorm.fit(variances,method = "MM")
-        print(shape)
-        print(scale)
-        print(loc)
-        return scipy.stats.lognorm(shape, scale=scale,loc=loc)
     
     @staticmethod
     def create_population(ind_length,pop_size,init_num_removed):
@@ -55,16 +42,25 @@ class GA:
         pop = np.array([random.choices([0,1], weights=(1, random.randint(a,b)), k=ind_length) for _  in range(pop_size)],dtype="b")
         
         return pop
+    
+    def get_distance(self):
+        up = self.population.dot(self.expression_data.age_weighted)
+        down = self.population.dot(self.expression_data.expressions_n)
+        avgs = np.divide(up,down)
+        return np.max(avgs, axis=1) - np.min(avgs, axis=1)
 
-    def __init__(self,expression_data,pop_size,num_gen,init_num_removed,mutation_probability,crossover_probability,gamma) -> None:
+    def get_fit_dist(self):
+        dists =  self.get_distance()
+        r = (dists - self.min_value) / (self.max_value - self.min_value)
+        p = np.vectorize(lambda x: np.count_nonzero(variances < x))(dists)/len(variances)
+        r = p + r
+        r = np.array([r[i] if p[i] > 0.5 else 0 for i in range(len(p))])
+        return r
+        
+
+    def __init__(self,expression_data,pop_size,num_gen,init_num_removed,mutation_probability,crossover_probability) -> None:
         ind_length = expression_data.full.shape[0]
         num_parents = round(pop_size * 0.15)
-        self.gamma = gamma
-        #self.gamma = scipy.stats.gamma(0.16114080012196816, scale=0.003763919999917581,loc=1.369238206226383e-06)
-        #self.gamma = scipy.stats.gamma(0.12894787508926014, scale=1.4138591772680575,loc=6.088829427981213e-07)
-        # After modifications
-        #self.gamma = scipy.stats.gamma(0.4206577838478015, scale=3.4008766040577783*15,loc=0.011999243192420739)
-        self.norm = scipy.stats.norm(loc=400,scale=400)
         self.pop_size = pop_size
         self.ind_length =ind_length
         self.num_gen = num_gen
@@ -82,6 +78,8 @@ class GA:
         self.p_prev_fit = 0
         self.prev_len = ind_length
         self.p_prev_len = ind_length
+        self.min_value = 0
+        self.max_value = 0.3
 
     def get_tai_var(self):
         up = self.population.dot(self.expression_data.age_weighted)
@@ -94,17 +92,15 @@ class GA:
         down = solution.dot(self.expression_data.expressions_n)
         avgs = np.divide(up,down)
         varr = np.var(avgs)
-        return varr,  1 - np.array(self.gamma.cdf(varr))
+        return np.max(avgs) - np.min(avgs)
     
-    def get_p_value(self):
-        return  1 - np.array(self.gamma.cdf(self.get_tai_var()))
         
     def fitness_funct(self):
         num_not_removed = np.sum(self.population,axis = 1)
         num_removed = self.ind_length - num_not_removed
         #rem_ratio = 1 - num_removed/self.ind_length
-        self.fitness = self.get_p_value() 
-        self.fitness = self.fitness + (self.fitness * (1 - num_removed/self.ind_length))
+        self.fitness = self.get_fit_dist()
+        self.fitness = self.fitness + (num_removed/self.ind_length)
         
     def get_avgs(self,sols):
         up = sols.dot(self.expression_data.age_weighted)
@@ -115,24 +111,23 @@ class GA:
     def on_gen(self):       
         if self.curr_gen % 10 == 0:
             print("Generation : ", self.curr_gen)
-            max_fitness_on = np.argmax(self.fitness)
+            max_fitness_on = np.argmin(self.fitness)
             best_solution = self.population[max_fitness_on]
-            varr,p = self.get_var_and_p_single(best_solution)
+            min_max = self.get_var_and_p_single(best_solution)
             print("Fitness of the best solution :", self.fitness[max_fitness_on])
-            print("Variance of the best solution :", varr)
-            print("P-value of the best solution :", p)
+            print("Min max of the best solution :", min_max)
             print("Length of the best solution :", len(best_solution) - sum(best_solution))
             print("Mutation probability :", self.mutation_probability)
         
         if self.curr_gen % 3 == 0:
-            max_fitness = np.max(self.fitness)
-            if self.prev_fit < self.p_prev_fit and max_fitness < self.prev_fit:
+            max_fitness = np.min(self.fitness)
+            if self.prev_fit > self.p_prev_fit and max_fitness > self.prev_fit:
                 self.mutation_probability -= 0.03
             self.p_prev_fit = self.prev_fit
             self.prev_fit = max_fitness
 
         if self.curr_gen % 10 == 0:
-            best_solution = self.population[np.argmax(self.fitness)]
+            best_solution = self.population[np.argmin(self.fitness)]
             best_sol_len = len(best_solution) - sum(best_solution)
             if self.prev_len == self.p_prev_len and self.prev_len == best_sol_len:
                 self.stop = True
@@ -157,13 +152,12 @@ class GA:
 
     def mutation_func2(self):
         mut = partial(GA.mutate2, self.mutation_probability)
-        with mp.Pool() as pool2:
-            res = np.array(list(map(mut, self.population)))
-            self.population = res
+        res = np.array(list(map(mut, self.population)))
+        self.population = res
     
     
     def steady_state_selection(self):
-        f_s = self.fitness.argsort()[::-1]
+        f_s = self.fitness.argsort()
         num_good = round(self.num_parents * 0.85)
         num_bad = self.num_parents  - num_good
         bad_inds = np.array(random.sample(range(num_good,self.pop_size),k=num_bad))
@@ -211,22 +205,22 @@ class GA:
 
 file_name = sys.argv[1]
 arr = pd.read_csv(file_name,
-                 delimiter="\t")
+                 delimiter=",")
 expression_data = Expression_data(arr)
 start = timer()
 solutions = []
-gamma = GA.flat_line_test_g_dist(expression_data,120000)
 for _ in range(10):
-    ga = GA(expression_data,3000,500,300,0.3,0.25,gamma)
+    ga = GA(expression_data,4000,600,300,0.3,0.25)
     ga_finish = ga()
     solutions.append(ga_finish.population[np.argmax(ga_finish.fitness)])
 
+np.savetxt("../results/new/phylo.csv",solutions,delimiter="\t" )
 end = timer()
 print(end - start)
 summed = np.array(solutions).sum(axis=0)
 sol = get_sol_from_indices(np.where(summed <= 3)[0],ga.ind_length)
 genes = get_removed_genes_from_solution(sol,expression_data.full)
-genes.to_csv("../results/victor/" + file_name.split("/")[-1])
+genes.to_csv("../results/new/ex_genes.csv")
 #np.savetxt("../results/victor/" + file_name.split("/")[-1], solutions, delimiter="\t")
 
 

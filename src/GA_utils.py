@@ -117,7 +117,18 @@ def comp_vars(expression_data,rounds):
         weighted = expression_data.expressions.mul(perm, axis=0)
         avg = weighted.sum(axis=0)/expression_data.expressions_n.sum(axis=0)
         avgs.append(avg)
-    return np.var(np.array(avgs), axis=1)
+    return np.var(avgs, axis=1)
+
+def comp_min_max(expression_data,rounds):
+    avgs = []
+    phil = expression_data.full["Phylostratum"]
+    print("Running permuations")
+    for _ in tqdm.trange(rounds):
+        perm = np.random.permutation(phil)
+        weighted = expression_data.expressions.mul(perm, axis=0)
+        avg = weighted.sum(axis=0)/expression_data.expressions_n.sum(axis=0)
+        avgs.append(avg)
+    return np.max(avgs, axis=1) - np.min(avgs, axis=1)
 
 def get_sol_from_indices(indices,ind_len):
     ones = np.ones(ind_len)
