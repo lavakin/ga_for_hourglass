@@ -1,13 +1,25 @@
 from deap import algorithms, base, creator, tools
 import random
-from functools import partial
 import numpy as np
 import scipy
 import pandas as pd
 import array
-import multiprocess
+#import multiprocess
 from timeit import default_timer as timer
 import GA_utils
+import argparse
+import os
+
+parser = argparse.ArgumentParser()
+    
+# Add arguments for input and output files
+parser.add_argument("input", type=str, help="Input file path")
+parser.add_argument("output", type=str, help="Output file path")
+
+parser.add_argument("--save_plot", action="store_true", help="Save pareto plot")
+#parser.add_argument("--save_pareto", action="store_true", help="Save Pareto front")
+args = parser.parse_args()
+
 class Expression_data:
 
     def quantilerank(xs):
@@ -26,16 +38,16 @@ class Expression_data:
         self.expressions = exps
 
 
-arr = pd.read_csv("../data/phylo.csv",
+arr = pd.read_csv(args.input,
                  delimiter=",")
 expression_data = Expression_data(arr)
-#mean,prec = GA_utils.comp_mean_prec(expression_data,50000)
+#variancs = GA_utils.comp_min_max(expression_data,1000000)
 variances = np.loadtxt("min_max_raw.txt")
 ind_length = expression_data.full.shape[0]
 
 population_size = 1000
 parents_ratio = 0.25
-num_generations = 4000
+num_generations = 2
 init_num_removed = 100
 
 
@@ -63,39 +75,21 @@ def get_fit(res):
     r = (res) / (max_value)
     r = r + p
     return r if p > 0.1 else 0
+
+def get_p(res):
+    return np.count_nonzero(variances < res)/len(variances)
     
-def evaluate_individual(individual):
+def evaluate_individual(individual,fit_funct = get_fit):
     individual = np.array(individual)
     num_not_removed = np.sum(individual)
     len_removed = ind_length - num_not_removed
     distance = get_distance(individual)
-    fit = get_fit(distance)
+    fit = fit_funct(distance)
     # Return the fitness values as a tuple
     return len_removed, fit
 
-def mutate(individual,indpb):
-    if random.random() < indpb:
-        randomlist = random.sample(range(len(individual)), k=random.getrandbits(5))
-        for ind in randomlist:
-            individual[ind] = (individual[ind] + 1) % 2
-    return individual,
-
-def scattered_crossover(ind1,ind2):
-    gene_sources = np.random.randint(0, 5, size=ind_length)
-    i1 = ind1.copy()
-    i2 = ind2.copy()
-    for i,x in enumerate(gene_sources):
-        if x > 0:
-            ind1[i] = i1[i]
-            ind2[i] = i2[i]
-        else:
-            ind1[i] = i2[i]
-            ind2[i] = i1[i]
-    return ind1,ind2
-
-
 mut  = 0.001
-cross = 0.02
+cross = 0.01
 
 creator.create("Fitness", base.Fitness, weights=(-1.0, -10.0))
 creator.create("Individual", array.array,typecode='b', fitness=creator.Fitness)
@@ -103,8 +97,9 @@ toolbox = base.Toolbox()
 toolbox.register("individual", create_individual)
 toolbox.register("population", tools.initRepeat, list, toolbox.individual)
 toolbox.register("evaluate", evaluate_individual)
-toolbox.register("mate", tools.cxUniform,indpb=cross)
+toolbox.register("mate", tools.cxUniformPartialyMatched,indpb=cross)
 toolbox.register("mutate", tools.mutFlipBit, indpb=mut)
+ref_points = tools.uniform_reference_points(nobj=2, p=300,scaling=0.8) 
 toolbox.register("select", tools.selSPEA2)
 
 
@@ -119,7 +114,6 @@ if __name__ == "__main__":
 
     start = timer()
     population, logbook = GA_utils.eaMuPlusLambda_stop(toolbox.population(n=population_size),toolbox, mu=round(population_size * parents_ratio), lambda_ = population_size,cxpb=0.45, mutpb=0.45, ngen=num_generations,stats=stats, verbose=True)
-    toolbox.register("select", tools.selNSGA2)
     #population, logbook = GA_utils.eaMuPlusLambda_stop(population,toolbox, mu=round(population_size2 * parents_ratio), lambda_ = population_size2,cxpb=0.3, mutpb=0.5, ngen=num_generations2,stats=stats, verbose=True)
 
     end = timer()
@@ -127,6 +121,12 @@ if __name__ == "__main__":
 
     pareto_front = tools.sortNondominated(population, k=population_size,first_front_only=True)
     par = np.array([list(x) for x in pareto_front[0]])
-    np.savetxt("../results/best_solutions_NSGA2.csv", par, delimiter="\t")
+    parr = np.array([evaluate_individual(x,fit_funct=get_p) for x in par])
+    if not os.path.exists(args.output):
+        os.makedirs(args.output)
+    np.savetxt(os.path.join(args.output,"pareto.csv"), par, delimiter="\t")
+    if args.save_plot:
+        GA_utils.plot_pareto(parr,args.output)
+    GA_utils.get_results_from_pareto(par,parr,args.output,expression_data.full.GeneID)
     print(mut)
     print(cross)

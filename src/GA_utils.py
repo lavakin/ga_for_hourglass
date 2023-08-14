@@ -1,9 +1,15 @@
 import matplotlib.pyplot as plt
+import matplotlib.patches as patches
 import numpy as np 
 from deap import algorithms, base, creator, tools
 import tqdm
 import scipy
+import os
 
+class SolutionException(Exception):
+    def __init__(self, message):
+        super().__init__(message)
+        
 def eaMuPlusLambda_stop(population, toolbox, mu, lambda_, cxpb, mutpb, ngen,
                    stats=None, halloffame=None, verbose=__debug__):
     logbook = tools.Logbook()
@@ -135,5 +141,50 @@ def get_sol_from_indices(indices,ind_len):
     ones[indices] = 0
     return ones
 
-def get_removed_genes_from_solution(solution,arr):
-    return arr.iloc[arr.index.values[np.where(solution == 0)[0]],:].GeneID
+def get_removed_genes_from_solution(solution,GeneIds):
+    return np.array(GeneIds[np.where(solution == 0)[0]])
+
+def plot_pareto(pareto,folder):
+    plt.scatter(pareto[:,0],pareto[:,1],s = 1.5,color='blue', marker='o', label='Solution')
+    plt.gca().invert_yaxis()
+    plt.gca().invert_xaxis()
+
+    plt.xlabel('Number of extracted genes')  # X-axis label
+    plt.ylabel('p-value')  # Y-axis label
+
+    plt.title('Solution extraction')  # Title
+
+    plt.legend()  # Show legend
+
+    plt.grid(True, linestyle='--', alpha=0.7)  # Add gridlines
+
+    plt.xticks(fontsize=12)  # Customize tick labels
+    plt.yticks(fontsize=12)
+    selected = pareto[np.logical_and(pareto[:,1] < 0.6,pareto[:,1] > 0.4)][:,0]
+    if len(selected) == 0:
+        raise SolutionException("No solution found")
+    
+    rect_x = min()
+    rect_y = 0.4
+    rect_width = rect_x*0.1
+    rect_height = 0.6 - 0.4
+
+    # Create a Rectangle patch
+    rectangle = patches.Rectangle((rect_x, rect_y), rect_width, rect_height,
+                                linewidth=2, edgecolor='red', facecolor='none', linestyle='dashed')
+
+    # Add the Rectangle patch to the current plot
+    plt.gca().add_patch(rectangle)
+    # Save or display the plot
+    plt.tight_layout()  # Adjust layout to prevent clipping of labels
+    # Save the plot as an image
+    plt.savefig(os.path.join(folder, "pareto_front.png"), dpi=300)
+
+def get_results_from_pareto(solutions,pareto,folder,GeneIds):
+    pareto = pareto[np.logical_and(pareto[:,1] < 0.6,pareto[:,1] > 0.4)]
+    min_v = min(pareto[:,0])
+    sel_sols  = solutions[pareto[:,0] < min_v + min_v *0.1]
+    if len(sel_sols) == 0:
+        raise SolutionException("No solution found")
+    genes = get_removed_genes_from_solution(get_sol_from_indices(np.where(len(sel_sols) - sel_sols.sum(axis=0) >= round(len(sel_sols)*0.8))[0],sel_sols.shape[1]),GeneIds)
+    np.savetxt(os.path.join(folder,"extracted_genes.txt"),genes, fmt="%s")
