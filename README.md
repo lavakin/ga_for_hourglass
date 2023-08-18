@@ -23,9 +23,9 @@ https://github.com/lavakin/ga_for_hourglass/assets/76702901/5435d04b-151b-46da-b
 To use this project, follow these steps:
 
 1. Clone the repository: `git clone https://github.com/lavakin/ga_for_hourglass.git`
-2. Install the required dependencies: `bash setup.sh`
+2. Install the required dependencies: `pip install -r requirements.txt`
 3. Configure the input data and parameters in the provided configuration files.
-4. Run the main script: `python3 src/DEAP_impl.py input_file output_folder  --save_plot`
+4. Run the main script: `python main.py`
 
 ## Contributing
 
