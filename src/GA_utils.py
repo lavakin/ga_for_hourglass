@@ -3,8 +3,8 @@ import matplotlib.patches as patches
 import numpy as np 
 from deap import algorithms, base, creator, tools
 import tqdm
-import scipy
 import os
+import concurrent.futures
 
 class SolutionException(Exception):
     def __init__(self, message):
@@ -63,6 +63,90 @@ def eaMuPlusLambda_stop(population, toolbox, mu, lambda_, cxpb, mutpb, ngen,
         if max_len_counter > 120:
             break
     return population, logbook
+
+
+def eaMuPlusLambda_stop_isl(islands, toolbox, mu, lambda_, cxpb, mutpb, ngen,
+                   stats=None, halloffame=None, verbose=__debug__):
+    
+    def isl_evaluate(invalid_ind):
+        return list(toolbox.map(toolbox.evaluate, invalid_ind))
+    
+    def isl_select(island):
+        return toolbox.select(island, mu)
+    
+    def isl_evolve(island):
+        return algorithms.varOr(island, toolbox, lambda_, cxpb, mutpb)
+
+
+    executor = concurrent.futures.ThreadPoolExecutor()
+
+    logbook = tools.Logbook()
+    logbook.header = ['gen', 'nevals'] + (stats.fields if stats else [])
+
+    # Evaluate the individuals with an invalid fitness
+    islands_inv = [[ind for ind in island if not ind.fitness.valid] for island in islands]
+    fitnesses = list(executor.map(isl_evaluate, islands_inv))
+    for i in range(len(islands_inv)):
+        for ind, fit in zip(islands_inv[i], fitnesses[i]):
+            ind.fitness.values = fit
+
+    if halloffame is not None:
+        halloffame.update(islands)
+
+    record = stats.compile(islands[0]) if stats is not None else {}
+    logbook.record(gen=0, nevals=len(islands_inv[0]), **record)
+    if verbose:
+        print(logbook.stream)
+    prev_max_len = 0
+    max_len_counter = 1
+    # Begin the generational process
+    for gen in range(1, ngen + 1):
+        # Vary the population
+        offsprings = list(executor.map(isl_evolve, islands))
+
+        # Evaluate the individuals with an invalid fitness
+        islands_inv = [[ind for ind in island if not ind.fitness.valid] for island in islands]
+        fitnesses = [list(toolbox.map(toolbox.evaluate, invalid_ind)) for invalid_ind in islands_inv]
+        
+        for i in range(len(islands_inv)):
+            for ind, fit in zip(islands_inv[i], fitnesses[i]):
+                ind.fitness.values = fit
+
+        islands_inv2 = [[ind for ind in island if not ind.fitness.valid] for island in offsprings]
+        fitnesses = list(executor.map(isl_evaluate, islands_inv2))
+        
+        for i in range(len(islands_inv2)):
+            for ind, fit in zip(islands_inv2[i], fitnesses[i]):
+                ind.fitness.values = fit
+        # Update the hall of fame with the generated individuals
+        if halloffame is not None:
+            halloffame.update(offsprings)
+        to_select = [islands[i] + offsprings[i] for i in range(len(islands))]
+        #print((len(list(island + offspring)) for island,offspring in zip(islands,offsprings)))
+        # Select the next generation population
+        islands = list(executor.map(isl_select, to_select))
+
+        # Update the statistics with the new population
+        for i in range(len(islands)):
+            record = stats.compile(islands[i]) if stats is not None else {}
+            logbook.record(gen=gen, nevals=len(islands_inv[i]), **record)
+            if verbose:
+                print(logbook.stream)
+        print("\n")
+        
+        max_len = max(islands[0], key=lambda ind: ind.fitness.values[0]).fitness.values[0]
+        if prev_max_len == max_len:
+            max_len_counter += 1
+        else:
+            prev_max_len = max_len
+            max_len_counter = 1
+        if max_len_counter > 120:
+            break
+
+        if gen%10 == 5:
+            toolbox.migrate(islands)
+
+    return islands, logbook
 
 def plot(GA):
         fig11 =plt.figure(figsize=(13, 8))
@@ -144,10 +228,11 @@ def get_sol_from_indices(indices,ind_len):
 def get_removed_genes_from_solution(solution,GeneIds):
     return np.array(GeneIds[np.where(solution == 0)[0]])
 
-def plot_pareto(pareto,folder):
+def plot_pareto(pareto,par,folder):
     plt.scatter(pareto[:,0],pareto[:,1],s = 1.5,color='blue', marker='o', label='Solution')
-    plt.gca().invert_yaxis()
-    plt.gca().invert_xaxis()
+    plt.scatter(par[:,0],par[:,1],s = 5,color='red', marker='o', label='Front')
+    #plt.gca().invert_yaxis()
+    #plt.gca().invert_xaxis()
 
     plt.xlabel('Number of extracted genes')  # X-axis label
     plt.ylabel('p-value')  # Y-axis label
@@ -164,7 +249,7 @@ def plot_pareto(pareto,folder):
     if len(selected) == 0:
         raise SolutionException("No solution found")
     
-    rect_x = min()
+    rect_x = min(selected)
     rect_y = 0.4
     rect_width = rect_x*0.1
     rect_height = 0.6 - 0.4
@@ -181,10 +266,12 @@ def plot_pareto(pareto,folder):
     plt.savefig(os.path.join(folder, "pareto_front.png"), dpi=300)
 
 def get_results_from_pareto(solutions,pareto,folder,GeneIds):
-    pareto = pareto[np.logical_and(pareto[:,1] < 0.6,pareto[:,1] > 0.4)]
-    min_v = min(pareto[:,0])
-    sel_sols  = solutions[pareto[:,0] < min_v + min_v *0.1]
-    if len(sel_sols) == 0:
+    pareto_filtered= pareto[np.logical_and(pareto[:,1] < 0.6,pareto[:,1] > 0.4)]
+    solutions = solutions[np.logical_and(pareto[:,1] < 0.6,pareto[:,1] > 0.4)]
+    if len(pareto_filtered) == 0:
         raise SolutionException("No solution found")
+    min_v = min(pareto[:,0])
+    sel_sols  = solutions[pareto_filtered[:,0] < min_v + min_v *0.1]
+    
     genes = get_removed_genes_from_solution(get_sol_from_indices(np.where(len(sel_sols) - sel_sols.sum(axis=0) >= round(len(sel_sols)*0.8))[0],sel_sols.shape[1]),GeneIds)
     np.savetxt(os.path.join(folder,"extracted_genes.txt"),genes, fmt="%s")
