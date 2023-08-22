@@ -76,25 +76,32 @@ def eaMuPlusLambda_stop_isl(islands, toolbox, mu, lambda_, cxpb, mutpb, ngen,
     
     def isl_evolve(island):
         return algorithms.varOr(island, toolbox, lambda_, cxpb, mutpb)
+    
+    def comp_fitness_inv(island):
+        inv_ind = [ind for ind in island if not ind.fitness.valid]
+        fitnesses = isl_evaluate(inv_ind)
+        for ind, fit in zip(inv_ind, fitnesses):
+                ind.fitness.values = fit
+
+    
+    def island_evolve(island):
+        offsprings  = isl_evolve(island)
+        comp_fitness_inv(island)
+        comp_fitness_inv(offsprings)
+        return isl_select(offsprings + island)
 
 
     executor = concurrent.futures.ThreadPoolExecutor()
 
     logbook = tools.Logbook()
-    logbook.header = ['gen', 'nevals'] + (stats.fields if stats else [])
+    logbook.header = ['gen'] + (stats.fields if stats else [])
 
     # Evaluate the individuals with an invalid fitness
-    islands_inv = [[ind for ind in island if not ind.fitness.valid] for island in islands]
-    fitnesses = list(executor.map(isl_evaluate, islands_inv))
-    for i in range(len(islands_inv)):
-        for ind, fit in zip(islands_inv[i], fitnesses[i]):
-            ind.fitness.values = fit
+    fitnesses = list(executor.map(comp_fitness_inv, islands))
 
-    if halloffame is not None:
-        halloffame.update(islands)
 
     record = stats.compile(islands[0]) if stats is not None else {}
-    logbook.record(gen=0, nevals=len(islands_inv[0]), **record)
+    logbook.record(gen=0, **record)
     if verbose:
         print(logbook.stream)
     prev_max_len = 0
@@ -102,49 +109,29 @@ def eaMuPlusLambda_stop_isl(islands, toolbox, mu, lambda_, cxpb, mutpb, ngen,
     # Begin the generational process
     for gen in range(1, ngen + 1):
         # Vary the population
-        offsprings = list(executor.map(isl_evolve, islands))
-
-        # Evaluate the individuals with an invalid fitness
-        islands_inv = [[ind for ind in island if not ind.fitness.valid] for island in islands]
-        fitnesses = [list(toolbox.map(toolbox.evaluate, invalid_ind)) for invalid_ind in islands_inv]
-        
-        for i in range(len(islands_inv)):
-            for ind, fit in zip(islands_inv[i], fitnesses[i]):
-                ind.fitness.values = fit
-
-        islands_inv2 = [[ind for ind in island if not ind.fitness.valid] for island in offsprings]
-        fitnesses = list(executor.map(isl_evaluate, islands_inv2))
-        
-        for i in range(len(islands_inv2)):
-            for ind, fit in zip(islands_inv2[i], fitnesses[i]):
-                ind.fitness.values = fit
-        # Update the hall of fame with the generated individuals
-        if halloffame is not None:
-            halloffame.update(offsprings)
-        to_select = [islands[i] + offsprings[i] for i in range(len(islands))]
-        #print((len(list(island + offspring)) for island,offspring in zip(islands,offsprings)))
-        # Select the next generation population
-        islands = list(executor.map(isl_select, to_select))
+        islands = list(executor.map(island_evolve, islands))
 
         # Update the statistics with the new population
         for i in range(len(islands)):
             record = stats.compile(islands[i]) if stats is not None else {}
-            logbook.record(gen=gen, nevals=len(islands_inv[i]), **record)
+            logbook.record(gen=gen, **record)
             if verbose:
                 print(logbook.stream)
+                
         print("\n")
         
-        max_len = max(islands[0], key=lambda ind: ind.fitness.values[0]).fitness.values[0]
+        max_len = min([max(islands[i], key=lambda ind: ind.fitness.values[0]).fitness.values[0] for i in range(len(islands))])
         if prev_max_len == max_len:
             max_len_counter += 1
         else:
             prev_max_len = max_len
             max_len_counter = 1
-        if max_len_counter > 120:
+        if max_len_counter > 60:
             break
 
         if gen%10 == 5:
             toolbox.migrate(islands)
+        
 
     return islands, logbook
 
@@ -245,11 +232,12 @@ def plot_pareto(pareto,par,folder):
 
     plt.xticks(fontsize=12)  # Customize tick labels
     plt.yticks(fontsize=12)
-    selected = pareto[np.logical_and(pareto[:,1] < 0.6,pareto[:,1] > 0.4)][:,0]
+    #selected = pareto[np.logical_and(pareto[:,1] < 0.6,pareto[:,1] > 0.4)][:,0]
+    selected = pareto
     if len(selected) == 0:
         raise SolutionException("No solution found")
     
-    rect_x = min(selected)
+    rect_x = np.min(selected[:,0])
     rect_y = 0.4
     rect_width = rect_x*0.1
     rect_height = 0.6 - 0.4
@@ -263,11 +251,15 @@ def plot_pareto(pareto,par,folder):
     # Save or display the plot
     plt.tight_layout()  # Adjust layout to prevent clipping of labels
     # Save the plot as an image
-    plt.savefig(os.path.join(folder, "pareto_front.png"), dpi=300)
+    
+    plt.savefig(os.path.join(folder, "pareto_front.png")) 
+    plt.show()
 
 def get_results_from_pareto(solutions,pareto,folder,GeneIds):
-    pareto_filtered= pareto[np.logical_and(pareto[:,1] < 0.6,pareto[:,1] > 0.4)]
-    solutions = solutions[np.logical_and(pareto[:,1] < 0.6,pareto[:,1] > 0.4)]
+    #pareto_filtered= pareto[np.logical_and(pareto[:,1] < 0.6,pareto[:,1] > 0.4)]
+    pareto_filtered = pareto
+    #solutions = solutions[np.logical_and(pareto[:,1] < 0.6,pareto[:,1] > 0.4)]
+    solutions = solutions
     if len(pareto_filtered) == 0:
         raise SolutionException("No solution found")
     min_v = min(pareto[:,0])

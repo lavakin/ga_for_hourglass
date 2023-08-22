@@ -45,10 +45,11 @@ expression_data = Expression_data(arr)
 permuts = np.loadtxt("min_max_raw.txt")
 ind_length = expression_data.full.shape[0]
 
-population_size = 400
-parents_ratio = 0.2
-num_generations = 3000
-init_num_removed = 100
+population_size = 150
+#parents_ratio = 0.2
+num_generations = 2000
+init_num_removed = 30
+num_islands = 4
 
 
 
@@ -104,18 +105,20 @@ toolbox.register("migrate",tools.migRing,k=10,selection = toolbox.select)
 stats = tools.Statistics()
 stats.register("Num removed", lambda x: x[np.argmin([ind.fitness.values[1] for ind in x])].fitness.values[0])
 stats.register("Min max distance", lambda x: np.min([ind.fitness.values[1] for ind in x]))
-islands = [toolbox.population(n=400) for _ in range(3)]
-population, logbook = GA_utils.eaMuPlusLambda_stop_isl(islands,toolbox, mu=round(len(islands[0]) * parents_ratio), lambda_ = len(islands[0]),cxpb=0.45, mutpb=0.45, ngen=num_generations,stats=stats, verbose=True)
+islands = [toolbox.population(n=population_size) for _ in range(num_islands)]
+population, logbook = GA_utils.eaMuPlusLambda_stop_isl(islands,toolbox, mu=round(len(islands[0])), lambda_ = len(islands[0]),cxpb=0.45, mutpb=0.45, ngen=num_generations,stats=stats, verbose=True)
 
-pop = np.flatten(np.array(population))
+pop = flattened_list = [solution for island in population for solution in island]
+
+if not os.path.exists(args.output):
+    os.makedirs(args.output)
 np.savetxt(os.path.join(args.output,"complete.csv"), pop, delimiter="\t")
 ress = np.array([evaluate_individual(x,fit_funct=get_p) for x in pop])
 
-pareto_front = tools.sortNondominated(population, k=population_size,first_front_only=True)
+pareto_front = tools.sortNondominated(pop, k=population_size*num_islands,first_front_only=True)
 par = np.array([list(x) for x in pareto_front[0]])
 parr = np.array([evaluate_individual(x,fit_funct=get_p) for x in par])
-if not os.path.exists(args.output):
-    os.makedirs(args.output)
+
 np.savetxt(os.path.join(args.output,"pareto.csv"), par, delimiter="\t")
 
 
