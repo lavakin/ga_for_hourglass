@@ -42,7 +42,7 @@ arr = pd.read_csv(args.input,
                  delimiter=",")
 expression_data = Expression_data(arr)
 #permuts = GA_utils.comp_min_max(expression_data,1000000)
-permuts = np.loadtxt("min_max_raw.txt")
+permuts = np.loadtxt("../min_max_raw.txt")
 ind_length = expression_data.full.shape[0]
 
 population_size = 180
@@ -94,19 +94,25 @@ cross = 0.02
 
 creator.create("Fitness", base.Fitness, weights=(-1.0, -10.0))
 creator.create("Individual", array.array,typecode='b', fitness=creator.Fitness)
+
 toolbox = base.Toolbox()
 toolbox.register("individual", create_individual)
 toolbox.register("population", tools.initRepeat, list, toolbox.individual)
 toolbox.register("evaluate", evaluate_individual)
 toolbox.register("mate", tools.cxUniformPartialyMatched,indpb=cross)
-toolbox.register("mutate", tools.mutFlipBit, indpb=mut)
+toolbox.register("mutate_low", tools.mutFlipBit, indpb=mut/2)
+toolbox.register("mutate_high", tools.mutFlipBit, indpb=mut)
 toolbox.register("select", tools.selSPEA2)
 toolbox.register("migrate",tools.migRing,k=10,selection = toolbox.select)
+
 stats = tools.Statistics()
 stats.register("Num removed", lambda x: x[np.argmin([ind.fitness.values[1] for ind in x])].fitness.values[0])
 stats.register("Min max distance", lambda x: np.min([ind.fitness.values[1] for ind in x]))
+
+mut_functs = [toolbox.mutate_high if i < num_islands * 0.4 else toolbox.mutate_low for i in range(num_islands)]
+
 islands = [toolbox.population(n=population_size) for _ in range(num_islands)]
-population, logbook = GA_utils.eaMuPlusLambda_stop_isl(islands,toolbox, mu=round(len(islands[0])), lambda_ = len(islands[0]),cxpb=0.45, mutpb=0.45, ngen=num_generations,stats=stats, verbose=True)
+population, logbook = GA_utils.eaMuPlusLambda_stop_isl(islands,toolbox, mu=round(len(islands[0])), lambda_ = len(islands[0]),cxpb=0.45, mutpb=0.45, ngen=num_generations, mut_functs_isl=mut_functs,stats=stats, verbose=True)
 
 pop = flattened_list = [solution for island in population for solution in island]
 
