@@ -89,6 +89,9 @@ def eaMuPlusLambda_stop_isl(islands, toolbox, mu, lambda_, cxpb, mutpb, ngen,
         comp_fitness_inv(island)
         comp_fitness_inv(offsprings)
         return isl_select(offsprings + island)
+    
+    def migrate(islands,gen):
+        
 
 
     executor = concurrent.futures.ThreadPoolExecutor()
@@ -120,7 +123,7 @@ def eaMuPlusLambda_stop_isl(islands, toolbox, mu, lambda_, cxpb, mutpb, ngen,
                 
         print("\n")
         
-        max_len = min([max(islands[i], key=lambda ind: ind.fitness.values[0]).fitness.values[0] for i in range(len(islands))])
+        max_len = min([min(islands[i], key=lambda ind: ind.fitness.values[1]).fitness.values[0] for i in range(len(islands))])
         if prev_max_len == max_len:
             max_len_counter += 1
         else:
@@ -128,15 +131,94 @@ def eaMuPlusLambda_stop_isl(islands, toolbox, mu, lambda_, cxpb, mutpb, ngen,
             max_len_counter = 1
         if max_len_counter > 60:
             break
-
-        if gen%10 == 5:
-            toolbox.migrate(islands)
+        if min([min(islands[i], key=lambda ind: ind.fitness.values[1]).fitness.values[1] for i in range(len(islands))]) > 0:
+            if gen%5 == 0:
+                toolbox.migrate(islands)
+        else:
+            if gen%10 == 0:
+                toolbox.migrate(islands)
         
 
     return islands, logbook
 
+
+def eaMuPlusLambda_stop_isl_multi(islands1,islands2, toolbox, mu, lambda_, cxpb, mutpb, ngen,
+                   stats=None, halloffame=None, verbose=__debug__):
+    
+    def isl_evaluate(invalid_ind):
+        return list(toolbox.map(toolbox.evaluate, invalid_ind))
+    
+    def isl_select(island):
+        return toolbox.select(island, mu)
+    
+    def isl_evolve(island):
+        return algorithms.varOr(island, toolbox, lambda_, cxpb, mutpb)
+    
+    def comp_fitness_inv(island):
+        inv_ind = [ind for ind in island if not ind.fitness.valid]
+        fitnesses = isl_evaluate(inv_ind)
+        for ind, fit in zip(inv_ind, fitnesses):
+                ind.fitness.values = fit
+
+    
+    def island_evolve(island):
+        offsprings  = isl_evolve(island)
+        comp_fitness_inv(island)
+        comp_fitness_inv(offsprings)
+        return isl_select(offsprings + island)
+
+
+    executor = concurrent.futures.ThreadPoolExecutor()
+
+    logbook = tools.Logbook()
+    logbook.header = ['gen'] + (stats.fields if stats else [])
+
+    # Evaluate the individuals with an invalid fitness
+    executor.map(comp_fitness_inv, islands1)
+    executor.map(comp_fitness_inv, islands2)
+
+
+    record = stats.compile(islands1[0]) if stats is not None else {}
+    logbook.record(gen=0, **record)
+    if verbose:
+        print(logbook.stream)
+    prev_max_len = 0
+    max_len_counter = 1
+    # Begin the generational process
+    for gen in range(1, ngen + 1):
+        # Vary the population
+        islands1 = list(executor.map(island_evolve, islands1))
+        islands2 = list(executor.map(island_evolve, islands2))
+
+        # Update the statistics with the new population
+        for i in range(len(islands1)):
+            record = stats.compile(islands1[i]) if stats is not None else {}
+            logbook.record(gen=gen, **record)
+            if verbose:
+                print(logbook.stream)
+                
+        print("\n")
+        
+        max_len = min([min(islands1[i], key=lambda ind: ind.fitness.values[1]).fitness.values[0] for i in range(len(islands))])
+        if prev_max_len == max_len:
+            max_len_counter += 1
+        else:
+            prev_max_len = max_len
+            max_len_counter = 1
+        if max_len_counter > 60:
+            break
+        if min([min(islands1[i], key=lambda ind: ind.fitness.values[1]).fitness.values[1] for i in range(len(islands1))]) > 0:
+            if gen%5 == 0:
+                toolbox.migrate(islands1)
+        else:
+            if gen%10 == 0:
+                toolbox.migrate(islands1)
+        
+
+    return islands1, islands2, logbook
+
 def plot(GA):
-        fig11 =plt.figure(figsize=(13, 8))
+        fig11 = plt.figure(figsize=(13, 8))
         x = np.linspace (0.0000005, 0.000001, 300) 
 
         #calculate pdf of Gamma distribution for each x-value

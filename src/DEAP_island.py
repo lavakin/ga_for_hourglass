@@ -45,11 +45,11 @@ expression_data = Expression_data(arr)
 permuts = np.loadtxt("min_max_raw.txt")
 ind_length = expression_data.full.shape[0]
 
-population_size = 150
+population_size = 180
 #parents_ratio = 0.2
-num_generations = 2000
-init_num_removed = 30
-num_islands = 4
+num_generations = 4000
+init_num_removed = 150
+num_islands = 3
 
 
 
@@ -89,7 +89,7 @@ def evaluate_individual(individual,fit_funct = get_fit):
     # Return the fitness values as a tuple
     return len_removed, fit
 
-mut  = 0.0005
+mut  = 0.001
 cross = 0.02
 
 creator.create("Fitness", base.Fitness, weights=(-1.0, -10.0))
